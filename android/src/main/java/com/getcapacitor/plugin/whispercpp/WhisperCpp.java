@@ -86,8 +86,12 @@ public class WhisperCpp {
     public void getSystemInfo(ResultCallback<JSObject> callback) {
         executor.execute(() -> {
             try {
-                String json = NativeBridge.getSystemInfo();
-                runOnMain(() -> callback.onResult(Result.success(jsonToJSObject(json))));
+                JSObject info = new JSObject();
+                info.put("platform", "android");
+                info.put("gpu_available", false);
+                info.put("max_threads", Runtime.getRuntime().availableProcessors());
+                info.put("memory_available_mb", Runtime.getRuntime().maxMemory() / (1024 * 1024));
+                runOnMain(() -> callback.onResult(Result.success(info)));
             } catch (Exception e) {
                 Log.e(TAG, "getSystemInfo", e);
                 runOnMain(() -> callback.onResult(Result.error(e)));
