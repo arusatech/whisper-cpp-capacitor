@@ -12,6 +12,9 @@ import org.json.JSONObject;
 @CapacitorPlugin(name = "WhisperCpp")
 public class WhisperCppPlugin extends Plugin {
     private static final String TAG = "WhisperCppPlugin";
+    private static final String KEY_PARAMS = "params";
+    private static final String KEY_MODEL = "model";
+    private static final String KEY_CONTEXT_ID = "contextId";
     private WhisperCpp implementation;
 
     @Override
@@ -23,8 +26,8 @@ public class WhisperCppPlugin extends Plugin {
 
     @PluginMethod
     public void initContext(PluginCall call) {
-        JSObject params = call.getObject("params");
-        String model = (params != null && params.has("model")) ? params.getString("model") : call.getString("model");
+        JSObject params = call.getObject(KEY_PARAMS);
+        String model = (params != null && params.has(KEY_MODEL)) ? params.getString(KEY_MODEL) : call.getString(KEY_MODEL);
         if (model == null || model.isEmpty()) {
             call.reject("model path is required");
             return;
@@ -45,7 +48,7 @@ public class WhisperCppPlugin extends Plugin {
 
     @PluginMethod
     public void releaseContext(PluginCall call) {
-        Integer contextId = call.getInt("contextId");
+        Integer contextId = call.getInt(KEY_CONTEXT_ID);
         if (contextId == null) {
             call.reject("contextId is required");
             return;
@@ -68,31 +71,14 @@ public class WhisperCppPlugin extends Plugin {
     public void transcribe(PluginCall call) {
         String audioData = call.getString("audio_data");
         Boolean isAudioFile = call.getBoolean("is_audio_file", false);
-        JSObject params = call.getObject("params");
+        JSObject params = call.getObject(KEY_PARAMS);
         if (audioData == null || params == null) {
             call.reject("audio_data and params are required");
             return;
         }
-        Integer contextId = call.getInt("contextId");
-        if (contextId != null) {
-            try {
-                params.put("contextId", contextId);
-            } catch (JSONException ignored) {}
-        }
+        mergeContextId(call, params);
 
-        boolean useProgressCallback = params.optBoolean("use_progress_callback", false);
-        WhisperCpp.ProgressCallback progressCallback = null;
-        if (useProgressCallback) {
-            progressCallback = progress -> {
-                JSObject data = new JSObject();
-                try {
-                    data.put("progress", progress);
-                } catch (JSONException ignored) {}
-                new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
-                    notifyListeners("progress", data)
-                );
-            };
-        }
+        WhisperCpp.ProgressCallback progressCallback = buildProgressCallback(params);
 
         implementation.transcribe(audioData, isAudioFile != null && isAudioFile, params, progressCallback, result -> {
             if (result.isSuccess()) {
@@ -109,7 +95,7 @@ public class WhisperCppPlugin extends Plugin {
 
     @PluginMethod
     public void transcribeRealtime(PluginCall call) {
-        JSObject params = call.getObject("params");
+        JSObject params = call.getObject(KEY_PARAMS);
         if (params == null) {
             call.reject("params are required");
             return;
@@ -118,16 +104,16 @@ public class WhisperCppPlugin extends Plugin {
         // Merge top-level streaming params into the params object
         Integer chunkLength = call.getInt("chunk_length_ms");
         if (chunkLength != null) {
-            try { params.put("chunk_length_ms", chunkLength); } catch (JSONException ignored) {}
+            try { params.put("chunk_length_ms", chunkLength); } catch (JSONException e) { /* int value, safe */ }
         }
         Integer stepLength = call.getInt("step_length_ms");
         if (stepLength != null) {
-            try { params.put("step_length_ms", stepLength); } catch (JSONException ignored) {}
+            try { params.put("step_length_ms", stepLength); } catch (JSONException e) { /* int value, safe */ }
         }
         // Ensure contextId is available in params
-        Integer contextId = call.getInt("contextId");
+        Integer contextId = call.getInt(KEY_CONTEXT_ID);
         if (contextId != null) {
-            try { params.put("contextId", contextId); } catch (JSONException ignored) {}
+            try { params.put(KEY_CONTEXT_ID, contextId); } catch (JSONException e) { /* int value, safe */ }
         }
 
         implementation.transcribeRealtime(
@@ -140,13 +126,37 @@ public class WhisperCppPlugin extends Plugin {
             },
             message -> {
                 JSObject errorData = new JSObject();
-                try { errorData.put("message", message); } catch (JSONException ignored) {}
+                try { errorData.put("message", message); } catch (JSONException e) { /* string value, safe */ }
                 notifyListeners("error", errorData);
             }
         );
 
         // Resolve immediately — streaming results come via events
         call.resolve();
+    }
+
+    private void mergeContextId(PluginCall call, JSObject params) {
+        Integer contextId = call.getInt(KEY_CONTEXT_ID);
+        if (contextId != null) {
+            try {
+                params.put(KEY_CONTEXT_ID, contextId);
+            } catch (JSONException e) { /* primitive int, put won't fail */ }
+        }
+    }
+
+    private WhisperCpp.ProgressCallback buildProgressCallback(JSObject params) {
+        if (!params.optBoolean("use_progress_callback", false)) {
+            return null;
+        }
+        return progress -> {
+            JSObject data = new JSObject();
+            try {
+                data.put("progress", progress);
+            } catch (JSONException e) { /* primitive int, put won't fail */ }
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
+                notifyListeners("progress", data)
+            );
+        };
     }
 
     @PluginMethod
