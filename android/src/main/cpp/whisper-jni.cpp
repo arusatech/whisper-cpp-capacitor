@@ -84,6 +84,48 @@ static std::string jsonGetString(const std::string& json, const char* key) {
 static std::map<int, cap_whisper_context*> s_contexts;
 static int s_nextId = 1;
 
+// ---------------------------------------------------------------------------
+// JNI progress callback support.
+// whisper.cpp calls the progress callback from a worker thread, so we use
+// JavaVM* (thread-safe) rather than JNIEnv* and attach/detach as needed.
+// ---------------------------------------------------------------------------
+
+struct jni_progress_callback_data {
+    JavaVM*   jvm;
+    jobject   callbackObj;   // global ref to Java ProgressCallback
+    jmethodID callbackMethod; // ProgressCallback.onProgress(int)
+    bool      attached;       // whether we attached the current thread
+};
+
+static void jni_progress_callback(int progress, void* user_data) {
+    auto* data = (jni_progress_callback_data*)user_data;
+    if (!data || !data->jvm || !data->callbackObj) return;
+
+    JNIEnv* env = nullptr;
+    bool didAttach = false;
+    jint status = data->jvm->GetEnv((void**)&env, JNI_VERSION_1_6);
+    if (status == JNI_EDETACHED) {
+        if (data->jvm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+            didAttach = true;
+        } else {
+            return; // cannot attach — skip this callback
+        }
+    } else if (status != JNI_OK) {
+        return;
+    }
+
+    env->CallVoidMethod(data->callbackObj, data->callbackMethod, (jint)progress);
+
+    // Clear any pending exception from the callback
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+
+    if (didAttach) {
+        data->jvm->DetachCurrentThread();
+    }
+}
+
 static std::string escapeJson(const char* s) {
     if (!s) return "\"\"";
     std::string o = "\"";
@@ -488,6 +530,141 @@ Java_com_getcapacitor_plugin_whispercpp_WhisperCpp_00024NativeBridge_transcribe(
     cap_whisper_result result = {};
     int ret = cap_whisper_full(ctx, samples.data(), (int)samples.size(), fp, &result);
     cap_whisper_full_params_free(fp);
+    if (ret != 0) {
+        return env->NewStringUTF("{}");
+    }
+    std::ostringstream out;
+    out << "{\"text\":" << escapeJson(result.text)
+        << ",\"language\":" << escapeJson(result.language)
+        << ",\"language_prob\":" << result.language_prob
+        << ",\"duration_ms\":" << result.duration_ms
+        << ",\"processing_time_ms\":" << result.processing_time_ms
+        << ",\"segments\":[";
+    for (int i = 0; i < result.n_segments; i++) {
+        if (i) out << ",";
+        out << "{\"start\":" << result.segments[i].start_ms
+            << ",\"end\":" << result.segments[i].end_ms
+            << ",\"text\":" << escapeJson(result.segments[i].text)
+            << ",\"no_speech_prob\":" << result.segments[i].no_speech_prob
+            << ",\"speaker_id\":" << result.segments[i].speaker_id << "}";
+    }
+    out << "]}";
+    cap_whisper_result_free(&result);
+    return env->NewStringUTF(out.str().c_str());
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_getcapacitor_plugin_whispercpp_WhisperCpp_00024NativeBridge_transcribeWithProgress(
+    JNIEnv* env, jclass, jint contextId, jstring jAudioData, jboolean isAudioFile,
+    jstring jParamsJson, jobject progressCallback) {
+    if (s_contexts.find(contextId) == s_contexts.end()) return env->NewStringUTF("{}");
+    cap_whisper_context* ctx = s_contexts[contextId];
+
+    // Parse params JSON
+    std::string json;
+    if (jParamsJson) {
+        const char* jsonStr = env->GetStringUTFChars(jParamsJson, nullptr);
+        if (jsonStr) {
+            json = jsonStr;
+            env->ReleaseStringUTFChars(jParamsJson, jsonStr);
+        }
+    }
+    const char* dataStr = env->GetStringUTFChars(jAudioData, nullptr);
+    if (!dataStr) return env->NewStringUTF("{}");
+    std::vector<float> samples;
+    if (isAudioFile == JNI_TRUE) {
+        std::string filePath(dataStr);
+        env->ReleaseStringUTFChars(jAudioData, dataStr);
+        if (!loadAudioFile(filePath.c_str(), samples)) {
+            return env->NewStringUTF("{}");
+        }
+    } else {
+        std::string b64(dataStr);
+        env->ReleaseStringUTFChars(jAudioData, dataStr);
+        if (b64.empty()) return env->NewStringUTF("{}");
+        size_t decLen = (b64.size() * 3) / 4;
+        std::vector<unsigned char> dec(decLen);
+        const char* tbl = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        size_t i = 0, j = 0;
+        int val = 0, pad = 0;
+        for (char c : b64) {
+            if (c == '=') { pad++; continue; }
+            const char* p = strchr(tbl, c);
+            if (!p) continue;
+            val = (val << 6) | (p - tbl);
+            if (++i % 4 == 0) {
+                if (j < decLen) dec[j++] = (val >> 16) & 0xff;
+                if (j < decLen) dec[j++] = (val >> 8) & 0xff;
+                if (j < decLen) dec[j++] = val & 0xff;
+            }
+        }
+        size_t n = j / sizeof(float);
+        samples.resize(n);
+        memcpy(samples.data(), dec.data(), n * sizeof(float));
+    }
+    if (samples.empty()) return env->NewStringUTF("{}");
+    cap_whisper_full_params* fp = cap_whisper_full_params_default();
+
+    // Override defaults with caller-supplied JSON params
+    fp->n_threads        = jsonGetInt(json, "n_threads", 1);
+    fp->n_max_text_ctx   = jsonGetInt(json, "n_max_text_ctx", 16384);
+    fp->offset_ms        = jsonGetInt(json, "offset_ms", 0);
+    fp->duration_ms      = jsonGetInt(json, "duration_ms", 0);
+    fp->translate        = jsonGetBool(json, "translate", false);
+    fp->no_context       = jsonGetBool(json, "no_context", false);
+    fp->no_timestamps    = jsonGetBool(json, "no_timestamps", false);
+    fp->single_segment   = jsonGetBool(json, "single_segment", false);
+
+    std::string langStr = jsonGetString(json, "language");
+    fp->language = langStr.empty() ? nullptr : langStr.c_str();
+    fp->detect_language = fp->language
+        ? jsonGetBool(json, "detect_language", false)
+        : jsonGetBool(json, "detect_language", true);
+
+    fp->split_on_word    = jsonGetBool(json, "split_on_word", false);
+    fp->max_len          = jsonGetInt(json, "max_len", 0);
+    fp->max_tokens       = jsonGetInt(json, "max_tokens", 0);
+    fp->speed_up         = jsonGetBool(json, "speed_up", false);
+    fp->audio_ctx        = jsonGetInt(json, "audio_ctx", 0);
+
+    std::string promptStr = jsonGetString(json, "initial_prompt");
+    fp->initial_prompt = promptStr.empty() ? nullptr : promptStr.c_str();
+
+    fp->temperature      = jsonGetFloat(json, "temperature", 0.0f);
+    fp->temperature_inc  = jsonGetFloat(json, "temperature_inc", 0.2f);
+    fp->entropy_thold    = jsonGetFloat(json, "entropy_thold", 2.4f);
+    fp->logprob_thold    = jsonGetFloat(json, "logprob_thold", -1.0f);
+    fp->no_speech_thold  = jsonGetFloat(json, "no_speech_thold", 0.6f);
+    fp->max_initial_ts   = jsonGetFloat(json, "max_initial_ts", 1.0f);
+    fp->beam_size        = jsonGetInt(json, "beam_size", 1);
+    fp->best_of          = jsonGetInt(json, "best_of", 1);
+    fp->tdrz_enable      = jsonGetBool(json, "tdrz_enable", false);
+    fp->token_timestamps = jsonGetBool(json, "token_timestamps", false);
+    fp->thold_pt         = jsonGetFloat(json, "thold_pt", 0.01f);
+    fp->thold_ptsum      = jsonGetFloat(json, "thold_ptsum", 0.01f);
+
+    // Set up JNI progress callback if a callback object was provided
+    jni_progress_callback_data cbData = {};
+    if (progressCallback) {
+        env->GetJavaVM(&cbData.jvm);
+        cbData.callbackObj = env->NewGlobalRef(progressCallback);
+        jclass cbClass = env->GetObjectClass(progressCallback);
+        cbData.callbackMethod = env->GetMethodID(cbClass, "onProgress", "(I)V");
+        if (cbData.callbackMethod) {
+            fp->progress_callback = jni_progress_callback;
+            fp->progress_callback_user_data = &cbData;
+        }
+    }
+
+    cap_whisper_result result = {};
+    int ret = cap_whisper_full(ctx, samples.data(), (int)samples.size(), fp, &result);
+    cap_whisper_full_params_free(fp);
+
+    // Clean up global ref
+    if (cbData.callbackObj) {
+        env->DeleteGlobalRef(cbData.callbackObj);
+    }
+
     if (ret != 0) {
         return env->NewStringUTF("{}");
     }

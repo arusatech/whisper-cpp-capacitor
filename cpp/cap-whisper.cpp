@@ -25,7 +25,20 @@ static void cap_whisper_context_params_to_whisper(const cap_whisper_context_para
   out->dtw_mem_size = 0;
 }
 
-static void cap_whisper_full_params_to_whisper(const cap_whisper_full_params* cap, struct whisper_full_params* w) {
+struct progress_trampoline_data {
+  cap_whisper_progress_callback callback;
+  void* user_data;
+};
+
+static void progress_trampoline(struct whisper_context* ctx, struct whisper_state* state, int progress, void* user_data) {
+  (void)ctx; (void)state;
+  auto* data = (progress_trampoline_data*)user_data;
+  if (data && data->callback) {
+    data->callback(progress, data->user_data);
+  }
+}
+
+static void cap_whisper_full_params_to_whisper(const cap_whisper_full_params* cap, struct whisper_full_params* w, progress_trampoline_data* trampoline) {
   w->n_threads = cap->n_threads > 0 ? cap->n_threads : 1;
   w->n_max_text_ctx = cap->n_max_text_ctx;
   w->offset_ms = cap->offset_ms;
@@ -61,8 +74,15 @@ static void cap_whisper_full_params_to_whisper(const cap_whisper_full_params* ca
   w->beam_search.beam_size = cap->beam_size;
   w->new_segment_callback = nullptr;
   w->new_segment_callback_user_data = nullptr;
-  w->progress_callback = nullptr;
-  w->progress_callback_user_data = nullptr;
+  if (cap->progress_callback && trampoline) {
+    trampoline->callback = cap->progress_callback;
+    trampoline->user_data = cap->progress_callback_user_data;
+    w->progress_callback = progress_trampoline;
+    w->progress_callback_user_data = trampoline;
+  } else {
+    w->progress_callback = nullptr;
+    w->progress_callback_user_data = nullptr;
+  }
   w->encoder_begin_callback = nullptr;
   w->encoder_begin_callback_user_data = nullptr;
   w->abort_callback = nullptr;
@@ -154,7 +174,8 @@ int cap_whisper_full(cap_whisper_context* ctx, const float* samples, int n_sampl
   memset(out_result, 0, sizeof(cap_whisper_result));
   enum whisper_sampling_strategy strategy = (params && params->beam_size > 1) ? WHISPER_SAMPLING_BEAM_SEARCH : WHISPER_SAMPLING_GREEDY;
   struct whisper_full_params wparams = whisper_full_default_params(strategy);
-  if (params) cap_whisper_full_params_to_whisper(params, &wparams);
+  progress_trampoline_data trampoline = {};
+  if (params) cap_whisper_full_params_to_whisper(params, &wparams, &trampoline);
   int ret = whisper_full(ctx->ctx, wparams, samples, n_samples);
   if (ret != 0) return ret;
   int n_seg = whisper_full_n_segments(ctx->ctx);

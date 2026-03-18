@@ -40,37 +40,37 @@ This plan implements a native Capacitor plugin that embeds whisper.cpp for offli
   - [x] 6.3 Add proper audio format decoding on Android (currently reads raw float32 only; add WAV header parsing at minimum)
   - [x] 6.4 Implement getSystemInfo with real device values (Runtime.maxMemory, Runtime.availableProcessors, GPU detection)
 
-- [ ] 7. Improve iOS implementation - streaming and progress callbacks
-  - [~] 7.1 Implement transcribeRealtime in WhisperCpp.swift using AVAudioEngine for mic capture and chunked whisper_full calls
-  - [~] 7.2 Implement stopTranscription to cancel active streaming session
-  - [~] 7.3 Wire progress_callback in cap-whisper.cpp to emit progress events back through the bridge
-  - [~] 7.4 Implement getModelInfo in WhisperCpp.swift to query a specific context's model info
-  - [~] 7.5 Implement getAudioFormat using AVFoundation to inspect audio file metadata
-  - [~] 7.6 Improve getSystemInfo to report actual memory_available_mb using os_proc_available_memory
+- [x] 7. Improve iOS implementation - streaming and progress callbacks
+  - [x] 7.1 Implement transcribeRealtime in WhisperCpp.swift using AVAudioEngine for mic capture and chunked whisper_full calls
+  - [x] 7.2 Implement stopTranscription to cancel active streaming session
+  - [x] 7.3 Wire progress_callback in cap-whisper.cpp to emit progress events back through the bridge
+  - [x] 7.4 Implement getModelInfo in WhisperCpp.swift to query a specific context's model info
+  - [x] 7.5 Implement getAudioFormat using AVFoundation to inspect audio file metadata
+  - [x] 7.6 Improve getSystemInfo to report actual memory_available_mb using os_proc_available_memory
 
-- [ ] 8. Implement Android streaming and progress callbacks
-  - [~] 8.1 Implement transcribeRealtime in WhisperCppPlugin.java using AudioRecord for mic capture
-  - [~] 8.2 Implement stopTranscription to cancel active streaming
-  - [~] 8.3 Add JNI progress callback support to emit events during transcription
-  - [~] 8.4 Implement getAudioFormat using MediaExtractor
-  - [~] 8.5 Add proper audio decoding for WAV, MP3, OGG, M4A using MediaCodec/MediaExtractor
+- [x] 8. Implement Android streaming and progress callbacks
+  - [x] 8.1 Implement transcribeRealtime in WhisperCppPlugin.java using AudioRecord for mic capture
+  - [x] 8.2 Implement stopTranscription to cancel active streaming
+  - [x] 8.3 Add JNI progress callback support to emit events during transcription
+  - [x] 8.4 Implement getAudioFormat using MediaExtractor
+  - [x] 8.5 Add proper audio decoding for WAV, MP3, OGG, M4A using MediaCodec/MediaExtractor
 
 - [ ] 9. Write TypeScript unit tests
-  - [~] 9.1 Test parameter validation for initContext, transcribe, releaseContext
-  - [~] 9.2 Test event subscription (on/off) and emission
-  - [~] 9.3 Test context registry management (add, remove, clear)
-  - [~] 9.4 Test error classes (ModelLoadError, ContextNotFoundError, etc.)
+  - [ ] 9.1 Test parameter validation for initContext, transcribe, releaseContext
+  - [ ] 9.2 Test event subscription (on/off) and emission
+  - [ ] 9.3 Test context registry management (add, remove, clear)
+  - [ ] 9.4 Test error classes (ModelLoadError, ContextNotFoundError, etc.)
 
 - [ ] 10. Write property-based tests (fast-check)
-  - [~] 10.1 Property: context uniqueness - multiple initContext calls produce distinct contextIds
-  - [~] 10.2 Property: segment timestamps monotonically non-decreasing
-  - [~] 10.3 Property: segment text concatenation equals full text
-  - [~] 10.4 Property: language_prob always in [0.0, 1.0]
+  - [ ] 10.1 Property: context uniqueness - multiple initContext calls produce distinct contextIds
+  - [ ] 10.2 Property: segment timestamps monotonically non-decreasing
+  - [ ] 10.3 Property: segment text concatenation equals full text
+  - [ ] 10.4 Property: language_prob always in [0.0, 1.0]
 
 - [ ] 11. Documentation and README
-  - [~] 11.1 Write comprehensive README.md with installation, setup, API reference, and examples
-  - [~] 11.2 Add model download instructions and platform setup guides
-  - [~] 11.3 Document build process for iOS and Android native libraries
+  - [ ] 11.1 Write comprehensive README.md with installation, setup, API reference, and examples
+  - [ ] 11.2 Add model download instructions and platform setup guides
+  - [ ] 11.3 Document build process for iOS and Android native libraries
 
 ## Notes
 

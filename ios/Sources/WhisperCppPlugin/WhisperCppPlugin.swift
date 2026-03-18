@@ -24,6 +24,19 @@ public class WhisperCppPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private let implementation = WhisperCpp()
 
+    public override func load() {
+        // Wire event callbacks from the implementation to Capacitor's event system
+        implementation.onSegment = { [weak self] segment in
+            self?.notifyListeners("segment", data: segment)
+        }
+        implementation.onResult = { [weak self] result in
+            self?.notifyListeners("transcribeResult", data: result)
+        }
+        implementation.onError = { [weak self] message in
+            self?.notifyListeners("error", data: ["message": message])
+        }
+    }
+
     @objc func initContext(_ call: CAPPluginCall) {
         guard let params = call.getObject("params"),
               let model = params["model"] as? String else {
@@ -94,7 +107,21 @@ public class WhisperCppPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("params are required")
             return
         }
-        implementation.transcribeRealtime(params: params) { result in
+        // Merge top-level streaming params with nested whisper params
+        var mergedParams = params
+        if let chunkLength = call.getInt("chunk_length_ms") {
+            mergedParams["chunk_length_ms"] = chunkLength
+        }
+        if let stepLength = call.getInt("step_length_ms") {
+            mergedParams["step_length_ms"] = stepLength
+        }
+        // Ensure contextId is available
+        if let cid = call.getInt("contextId") {
+            mergedParams["contextId"] = cid
+        } else if mergedParams["contextId"] == nil, let cid = params["contextId"] {
+            mergedParams["contextId"] = cid
+        }
+        implementation.transcribeRealtime(params: mergedParams) { result in
             switch result {
             case .success:
                 call.resolve()
@@ -127,7 +154,11 @@ public class WhisperCppPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func getModelInfo(_ call: CAPPluginCall) {
-        implementation.getModelInfo { result in
+        guard let contextId = call.getInt("contextId") else {
+            call.reject("contextId is required")
+            return
+        }
+        implementation.getModelInfo(contextId: contextId) { result in
             switch result {
             case .success(let info):
                 call.resolve(info)

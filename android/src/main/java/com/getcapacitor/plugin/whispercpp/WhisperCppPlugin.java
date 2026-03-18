@@ -79,7 +79,22 @@ public class WhisperCppPlugin extends Plugin {
                 params.put("contextId", contextId);
             } catch (JSONException ignored) {}
         }
-        implementation.transcribe(audioData, isAudioFile != null && isAudioFile, params, result -> {
+
+        boolean useProgressCallback = params.optBoolean("use_progress_callback", false);
+        WhisperCpp.ProgressCallback progressCallback = null;
+        if (useProgressCallback) {
+            progressCallback = progress -> {
+                JSObject data = new JSObject();
+                try {
+                    data.put("progress", progress);
+                } catch (JSONException ignored) {}
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
+                    notifyListeners("progress", data)
+                );
+            };
+        }
+
+        implementation.transcribe(audioData, isAudioFile != null && isAudioFile, params, progressCallback, result -> {
             if (result.isSuccess()) {
                 try {
                     call.resolve(result.getData());
@@ -94,12 +109,55 @@ public class WhisperCppPlugin extends Plugin {
 
     @PluginMethod
     public void transcribeRealtime(PluginCall call) {
-        call.reject("transcribeRealtime not implemented on Android yet");
+        JSObject params = call.getObject("params");
+        if (params == null) {
+            call.reject("params are required");
+            return;
+        }
+
+        // Merge top-level streaming params into the params object
+        Integer chunkLength = call.getInt("chunk_length_ms");
+        if (chunkLength != null) {
+            try { params.put("chunk_length_ms", chunkLength); } catch (JSONException ignored) {}
+        }
+        Integer stepLength = call.getInt("step_length_ms");
+        if (stepLength != null) {
+            try { params.put("step_length_ms", stepLength); } catch (JSONException ignored) {}
+        }
+        // Ensure contextId is available in params
+        Integer contextId = call.getInt("contextId");
+        if (contextId != null) {
+            try { params.put("contextId", contextId); } catch (JSONException ignored) {}
+        }
+
+        implementation.transcribeRealtime(
+            params,
+            segment -> notifyListeners("segment", segment),
+            result -> {
+                if (result.isSuccess()) {
+                    notifyListeners("transcribeResult", result.getData());
+                }
+            },
+            message -> {
+                JSObject errorData = new JSObject();
+                try { errorData.put("message", message); } catch (JSONException ignored) {}
+                notifyListeners("error", errorData);
+            }
+        );
+
+        // Resolve immediately — streaming results come via events
+        call.resolve();
     }
 
     @PluginMethod
     public void stopTranscription(PluginCall call) {
-        call.resolve();
+        implementation.stopTranscription(result -> {
+            if (result.isSuccess()) {
+                call.resolve();
+            } else {
+                call.reject(result.getError().getMessage());
+            }
+        });
     }
 
     @PluginMethod
@@ -134,7 +192,18 @@ public class WhisperCppPlugin extends Plugin {
 
     @PluginMethod
     public void getAudioFormat(PluginCall call) {
-        call.reject("getAudioFormat not implemented");
+        String path = call.getString("path");
+        if (path == null || path.isEmpty()) {
+            call.reject("path is required");
+            return;
+        }
+        implementation.getAudioFormat(path, result -> {
+            if (result.isSuccess()) {
+                call.resolve(result.getData());
+            } else {
+                call.reject(result.getError().getMessage());
+            }
+        });
     }
 
     @PluginMethod

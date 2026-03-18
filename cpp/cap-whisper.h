@@ -17,6 +17,8 @@ typedef struct cap_whisper_word cap_whisper_word;
 typedef struct cap_whisper_result cap_whisper_result;
 typedef struct cap_whisper_model_info cap_whisper_model_info;
 
+typedef void (*cap_whisper_progress_callback)(int progress, void* user_data);
+
 struct cap_whisper_context_params {
   const char* model_path;
   bool use_gpu;
@@ -137,6 +139,8 @@ struct cap_whisper_full_params {
   bool token_timestamps;
   float thold_pt;
   float thold_ptsum;
+  cap_whisper_progress_callback progress_callback;
+  void* progress_callback_user_data;
 };
 
 cap_whisper_full_params* cap_whisper_full_params_default(void);

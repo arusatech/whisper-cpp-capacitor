@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import <dlfcn.h>
+#include <os/proc.h>
 
 typedef struct cap_whisper_context cap_whisper_context;
 typedef struct cap_whisper_context_params cap_whisper_context_params;
@@ -310,11 +311,15 @@ static void fillFullParams(NSDictionary* d, cap_whisper_full_params* p) {
 }
 
 + (NSDictionary*)getSystemInfo {
+    NSUInteger memoryMb = 0;
+    if (@available(iOS 13.0, *)) {
+        memoryMb = (NSUInteger)(os_proc_available_memory() / (1024 * 1024));
+    }
     return @{
         @"platform": @"ios",
         @"gpu_available": @YES,
         @"max_threads": @(NSProcessInfo.processInfo.processorCount),
-        @"memory_available_mb": @(0)
+        @"memory_available_mb": @(memoryMb)
     };
 }
 
