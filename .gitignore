@@ -6,6 +6,9 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
+# Reference code (whisper.cpp, llama-cpp) - clone separately if building native
+ref-code/
+
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
@@ -137,3 +140,29 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Capacitor / Cordova
+# Native build outputs + tooling caches (do not ignore source directories)
+android/.gradle/
+android/build/
+android/src/main/jniLibs/
+android/*.iml
+android/local.properties
+
+ios/build/
+ios/Frameworks/
+ios/Pods/
+ios/Podfile.lock
+ios/*.xcworkspace/
+ios/*.xcworkspace/xcshareddata/
+ios/*.xcuserstate
+ios/*.xcodeproj/
+ios/xcuserdata/
+
+# Xcode tends to create these in some projects; safe to ignore
+*.xcuserdata/
+*.xcuserstate
+
+# Capacitor/Web build output for apps (harmless if this is a plugin repo)
+www/
+dist/

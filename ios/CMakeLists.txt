@@ -1,0 +1,41 @@
+cmake_minimum_required(VERSION 3.16)
+project(WhisperCpp VERSION 1.0.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_OSX_DEPLOYMENT_TARGET 13.0)
+set(CMAKE_XCODE_ATTRIBUTE_ENABLE_BITCODE NO)
+
+set(WHISPER_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../ref-code/whisper.cpp)
+set(CPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../cpp)
+
+if(NOT EXISTS ${WHISPER_ROOT}/CMakeLists.txt)
+  message(FATAL_ERROR "whisper.cpp not found at ${WHISPER_ROOT}. Ensure ref-code/whisper.cpp is available.")
+endif()
+
+set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(WHISPER_STANDALONE OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+if(APPLE)
+  set(GGML_METAL ON CACHE BOOL "" FORCE)
+  set(WHISPER_COREML OFF CACHE BOOL "" FORCE)
+endif()
+
+add_subdirectory(${WHISPER_ROOT} ${CMAKE_BINARY_DIR}/whisper)
+
+add_library(WhisperCpp SHARED ${CPP_DIR}/cap-whisper.cpp)
+target_include_directories(WhisperCpp PRIVATE ${WHISPER_ROOT}/include ${CPP_DIR})
+target_link_libraries(WhisperCpp PRIVATE whisper)
+
+set_target_properties(WhisperCpp PROPERTIES
+  FRAMEWORK TRUE
+  FRAMEWORK_VERSION A
+  MACOSX_FRAMEWORK_IDENTIFIER com.whispercpp.capacitor
+  MACOSX_FRAMEWORK_SHORT_VERSION_STRING 1.0.0
+  XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "iPhone Developer"
+  XCODE_ATTRIBUTE_ENABLE_BITCODE NO
+  PUBLIC_HEADER "${CPP_DIR}/cap-whisper.h"
+)
+
+install(TARGETS WhisperCpp FRAMEWORK DESTINATION .)
