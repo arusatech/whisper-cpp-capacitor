@@ -55,11 +55,11 @@ This plan implements a native Capacitor plugin that embeds whisper.cpp for offli
   - [x] 8.4 Implement getAudioFormat using MediaExtractor
   - [x] 8.5 Add proper audio decoding for WAV, MP3, OGG, M4A using MediaCodec/MediaExtractor
 
-- [ ] 9. Write TypeScript unit tests
-  - [ ] 9.1 Test parameter validation for initContext, transcribe, releaseContext
-  - [ ] 9.2 Test event subscription (on/off) and emission
-  - [ ] 9.3 Test context registry management (add, remove, clear)
-  - [ ] 9.4 Test error classes (ModelLoadError, ContextNotFoundError, etc.)
+- [x] 9. Write TypeScript unit tests
+  - [x] 9.1 Test parameter validation for initContext, transcribe, releaseContext
+  - [x] 9.2 Test event subscription (on/off) and emission
+  - [x] 9.3 Test context registry management (add, remove, clear)
+  - [x] 9.4 Test error classes (ModelLoadError, ContextNotFoundError, etc.)
 
 - [ ] 10. Write property-based tests (fast-check)
   - [ ] 10.1 Property: context uniqueness - multiple initContext calls produce distinct contextIds
