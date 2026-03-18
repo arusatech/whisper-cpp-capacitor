@@ -62,15 +62,15 @@ This plan implements a native Capacitor plugin that embeds whisper.cpp for offli
   - [x] 9.4 Test error classes (ModelLoadError, ContextNotFoundError, etc.)
 
 - [ ] 10. Write property-based tests (fast-check)
-  - [ ] 10.1 Property: context uniqueness - multiple initContext calls produce distinct contextIds
-  - [ ] 10.2 Property: segment timestamps monotonically non-decreasing
-  - [ ] 10.3 Property: segment text concatenation equals full text
-  - [ ] 10.4 Property: language_prob always in [0.0, 1.0]
+  - [x] 10.1 Property: context uniqueness - multiple initContext calls produce distinct contextIds
+  - [x] 10.2 Property: segment timestamps monotonically non-decreasing
+  - [x] 10.3 Property: segment text concatenation equals full text
+  - [x] 10.4 Property: language_prob always in [0.0, 1.0]
 
-- [ ] 11. Documentation and README
-  - [ ] 11.1 Write comprehensive README.md with installation, setup, API reference, and examples
-  - [ ] 11.2 Add model download instructions and platform setup guides
-  - [ ] 11.3 Document build process for iOS and Android native libraries
+- [x] 11. Documentation and README
+  - [x] 11.1 Write comprehensive README.md with installation, setup, API reference, and examples
+  - [x] 11.2 Add model download instructions and platform setup guides
+  - [x] 11.3 Document build process for iOS and Android native libraries
 
 ## Notes
 
