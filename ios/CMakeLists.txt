@@ -6,11 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_OSX_DEPLOYMENT_TARGET 13.0)
 set(CMAKE_XCODE_ATTRIBUTE_ENABLE_BITCODE NO)
 
-set(WHISPER_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../ref-code/whisper.cpp)
+set(WHISPER_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../cpp/whisper.cpp)
 set(CPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../cpp)
 
 if(NOT EXISTS ${WHISPER_ROOT}/CMakeLists.txt)
-  message(FATAL_ERROR "whisper.cpp not found at ${WHISPER_ROOT}. Ensure ref-code/whisper.cpp is available.")
+  message(FATAL_ERROR "whisper.cpp not found at ${WHISPER_ROOT}. Run: git submodule update --init")
 endif()
 
 set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)

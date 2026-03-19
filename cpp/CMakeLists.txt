@@ -5,7 +5,7 @@
 # and android/src/main/cpp/CMakeLists.txt.
 #
 # Required: whisper.cpp with include/whisper.h and built target "whisper".
-# Set WHISPER_ROOT to ref-code/whisper.cpp when building from plugin root.
+# Set WHISPER_ROOT to cpp/whisper.cpp (git submodule) when building from plugin root.
 
 cmake_minimum_required(VERSION 3.16)
 # This is not a standalone project; included from ios/ or android/

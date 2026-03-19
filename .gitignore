@@ -149,6 +149,9 @@ android/src/main/jniLibs/
 android/*.iml
 android/local.properties
 
+# WASM build artifacts
+build-wasm/
+
 ios/build/
 ios/Frameworks/
 ios/Pods/

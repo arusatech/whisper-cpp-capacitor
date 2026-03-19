@@ -1,13 +1,13 @@
 # whisper-cpp-capacitor
 
-Native Capacitor plugin that embeds [whisper.cpp](https://github.com/ggerganov/whisper.cpp) for fully offline, on-device speech-to-text transcription on iOS and Android.
+Native Capacitor plugin that embeds [whisper.cpp](https://github.com/ggerganov/whisper.cpp) for fully offline, on-device speech-to-text transcription on iOS, Android, and Web/PWA.
 
 All audio processing happens locally — no data leaves the device.
 
 ## Features
 
 - Offline speech-to-text powered by whisper.cpp
-- Unified TypeScript API across iOS and Android
+- Unified TypeScript API across iOS, Android, and Web
 - Context lifecycle management (`initContext` / `releaseContext` / `releaseAllContexts`)
 - Batch transcription from base64 audio or file paths
 - Real-time streaming transcription with live segment events
@@ -16,6 +16,7 @@ All audio processing happens locally — no data leaves the device.
 - Speaker diarization (turn detection)
 - Multiple audio format support (WAV, MP3, OGG, FLAC, M4A, WebM)
 - GPU acceleration: Metal on iOS, OpenCL/Vulkan on Android
+- Web/PWA support via WebAssembly with IndexedDB model caching
 - Progress callbacks during model loading and transcription
 - Typed error classes for structured error handling
 
@@ -29,6 +30,7 @@ All audio processing happens locally — no data leaves the device.
 | CMake | 3.20+ |
 | iOS: Xcode | 14+ (Swift 5.7+, iOS 13+) |
 | Android: NDK | r25+ (API 24+, Gradle 8+) |
+| Web: Emscripten | 3.0+ (optional, for WASM build) |
 
 ## Installation
 
@@ -39,13 +41,13 @@ npx cap sync
 
 ### whisper.cpp Source
 
-The plugin builds whisper.cpp from source. Clone or copy it into the plugin directory:
+The plugin builds whisper.cpp from source via a git submodule at `cpp/whisper.cpp`:
 
 ```bash
-git clone https://github.com/ggerganov/whisper.cpp.git ref-code/whisper.cpp
+git submodule update --init
 ```
 
-The path `ref-code/whisper.cpp` must contain a valid `CMakeLists.txt`. Both iOS and Android CMake configs reference this location.
+Both iOS and Android CMake configs reference `cpp/whisper.cpp`.
 
 ## Model Files
 
@@ -68,6 +70,16 @@ Quantized variants (Q4, Q5) are also supported and recommended for mobile to red
 **iOS**: Add the model file to your Xcode project's assets or copy it to the app's Documents directory at runtime. Use `is_model_asset: true` if bundled as an asset.
 
 **Android**: Place models in the app's `assets/` folder or download to internal storage. Use `is_model_asset: true` for bundled assets.
+
+**Web**: Pass a URL to the model file. The model is fetched and cached in IndexedDB automatically. Serve model files from your app's static assets or a CDN.
+
+```typescript
+// Web example — model loaded from URL
+const ctx = await WhisperCpp.initContext({
+  model: 'https://your-cdn.com/models/ggml-base.en.bin',
+  n_threads: 4,
+});
+```
 
 ```bash
 # Example: download base English model
@@ -349,8 +361,8 @@ The iOS build produces a dynamic framework wrapping whisper.cpp with Metal GPU s
 **Prerequisites**: macOS, Xcode 14+, CMake 3.20+
 
 ```bash
-# Ensure whisper.cpp source is available
-ls ref-code/whisper.cpp/CMakeLists.txt
+# Ensure whisper.cpp submodule is initialized
+git submodule update --init
 
 # Build the iOS framework
 ./build-native.sh
@@ -405,10 +417,35 @@ npm run build
 # Native only (iOS framework)
 npm run build:native
 
+# WASM (Web)
+npm run build:wasm
+
 # Clean build artifacts
 npm run clean          # TypeScript dist/
-npm run clean:native   # iOS/Android build dirs
+npm run clean:native   # iOS/Android/WASM build dirs
 ```
+
+### Web/WASM
+
+The web build compiles whisper.cpp to WebAssembly using Emscripten.
+
+**Prerequisites**: [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) activated in PATH.
+
+```bash
+# Install and activate emsdk (one-time)
+git clone https://github.com/emscripten-core/emsdk.git
+cd emsdk && ./emsdk install latest && ./emsdk activate latest
+source ./emsdk_env.sh
+
+# Build WASM module
+./build-native-web.sh              # Release, single-file (WASM embedded in JS)
+./build-native-web.sh --debug      # Debug build with assertions
+./build-native-web.sh --split      # Separate .wasm file (smaller JS)
+```
+
+This produces `dist/wasm/whisper.js` which is loaded by `src/web.ts` at runtime. In single-file mode (default), the WASM binary is embedded in the JS file. In split mode, `dist/wasm/whisper.wasm` is also produced.
+
+For web apps, ensure `dist/wasm/whisper.js` is accessible from your app's serving path, or set `window.WhisperModule` to the factory function before calling `initContext`.
 
 ## Project Structure
 
@@ -418,10 +455,13 @@ whisper-cpp-capacitor/
 │   ├── definitions.ts      # All type definitions and plugin interface
 │   ├── index.ts            # Main entry: context registry, validation, events
 │   ├── errors.ts           # Typed error classes
-│   └── web.ts              # Web stub (not yet implemented)
+│   └── web.ts              # Web/WASM implementation (Emscripten module)
 ├── cpp/                    # C++ wrapper around whisper.cpp
 │   ├── cap-whisper.cpp     # Implementation
-│   └── cap-whisper.h       # Public C API
+│   ├── cap-whisper.h       # Public C API
+│   └── cap-whisper-wasm.cpp # Emscripten embind bindings for WASM
+├── wasm/
+│   └── CMakeLists.txt      # WASM build configuration
 ├── ios/
 │   ├── CMakeLists.txt      # iOS framework build config
 │   └── Sources/WhisperCppPlugin/
@@ -437,7 +477,7 @@ whisper-cpp-capacitor/
 │       └── java/com/.../
 │           ├── WhisperCppPlugin.java  # Capacitor plugin methods
 │           └── WhisperCpp.java        # Context management, JNI wrapper
-├── ref-code/whisper.cpp    # whisper.cpp source (git clone)
+├── cpp/whisper.cpp/        # whisper.cpp source (git submodule)
 ├── build-native.sh         # iOS framework build script
 ├── Package.swift           # Swift Package Manager config
 └── package.json
@@ -449,7 +489,7 @@ whisper-cpp-capacitor/
 
 **Android**: Uses Java (not Kotlin) for the plugin layer. JNI bridges to the C++ wrapper. Audio decoding supports WAV, MP3, OGG, and M4A via `MediaCodec`/`MediaExtractor`. Requires API 24+.
 
-**Web**: Currently a stub. `initContext` and `transcribe` throw "not implemented" errors. `getSystemInfo` returns basic browser info. A future WebAssembly build is planned.
+**Web/PWA**: Uses WebAssembly (Emscripten) to run whisper.cpp in the browser. Models are fetched via URL and cached in IndexedDB. Audio decoding uses the Web Audio API. Streaming uses `getUserMedia` + `ScriptProcessorNode`. Requires building the WASM module with `./build-native-web.sh` (needs Emscripten SDK).
 
 ## License
 

@@ -10,9 +10,9 @@ print_status() { echo -e "\033[0;34m[INFO]\033[0m $1"; }
 print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-WHISPER_ROOT="$(cd "$(dirname "$0")" && pwd)/ref-code/whisper.cpp"
+WHISPER_ROOT="$(cd "$(dirname "$0")" && pwd)/cpp/whisper.cpp"
 if [ ! -f "$WHISPER_ROOT/CMakeLists.txt" ]; then
-  print_error "ref-code/whisper.cpp not found. Clone or copy whisper.cpp to ref-code/whisper.cpp."
+  print_error "cpp/whisper.cpp not found. Run: git submodule update --init"
   exit 1
 fi
 
